@@ -215,9 +215,8 @@ This was a major turning point in the assessment because it opened access to fun
 
 **Vulnerability:** SQL Injection – Authentication Bypass
 
-**Evidence:**
 
-[Insert authentication bypass screenshot here]
+
 
 ### Why it matters
 
@@ -242,7 +241,7 @@ All three files were password-protected.
 
 **Evidence:**
 
-![Confidential Reports](screenshots/07-confidential-reports.png)
+![Confidential Reports](07-confidential-reports.png)
 
 *Figure 07 – Three protected laboratory reports.*
 
@@ -280,7 +279,7 @@ The recovery process was successful for all three documents.
 
 **Evidence:**
 
-![PDFCrack Results](screenshots/08-pdfcrack-results.png)
+![PDFCrack Results](08-pdfcrack-results.png)
 
 *Figure 08 – PDF password recovery results. Passwords are hidden.*
 
@@ -294,7 +293,7 @@ This confirmed that the password protection did not prevent access once the pass
 
 ![PDF Access](9-pdf-access.png)
 
-*Figure 09 – Successful PDF access. Patient information is redacted.*
+*Figure 09 – Successful PDF access.*
 
 ---
 
