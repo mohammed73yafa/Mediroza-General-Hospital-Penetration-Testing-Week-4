@@ -1,89 +1,366 @@
-# Mediroza General Hospital – Web Application Penetration Testing (Week 4)
+# Mediroza-General-Hospital-Penetration-Testing-Week-4
 
 <p align="center">
   <b>Black-Box Web Application Penetration Testing</b><br>
-  NetworkWalks | Batch B083 | Week 04
+  NetworkWalks | B084 | Week 04
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Assessment-Black--Box-blue" alt="Black-Box">
-  <img src="https://img.shields.io/badge/Target-Web%20Application-orange" alt="Web Application">
-  <img src="https://img.shields.io/badge/Batch-B083-informational" alt="Batch B083">
-  <img src="https://img.shields.io/badge/Week-04-green" alt="Week 04">
+  <img src="https://img.shields.io/badge/Assessment-Black--Box-blue">
+  <img src="https://img.shields.io/badge/Platform-Web%20Application-orange">
+  <img src="https://img.shields.io/badge/Week-04-green">
+  <img src="https://img.shields.io/badge/Status-In%20Progress-yellow">
 </p>
 
 ---
 
-## Project Overview
+## About This Project
 
-This repository documents the black-box penetration testing engagement conducted against **Mediroza General Hospital** (`https://medirozahospital.com`) as part of the NetworkWalks Cybersecurity Program (**Batch B083 – Week 04**).
+This repository contains my notes, findings, and evidence from a practical web application penetration testing assessment conducted against **Mediroza General Hospital** as part of the NetworkWalks B084 training program.
 
-The objective of this engagement was to identify security weaknesses across the hospital's web infrastructure, evaluate authentication controls, gain unauthorized access to restricted patient laboratory reports, recover protected PDF contents, and assess the impact of exposed backend data.
+The assessment was approached as a Black-Box test. I started with what was publicly available, explored the application, and followed each interesting discovery to see where it would lead.
 
-| Parameter | Details |
-| :--- | :--- |
-| **Client** | Mediroza General Hospital |
-| **Target** | `https://medirozahospital.com` |
-| **Assessment Type** | Black-Box Penetration Testing |
-| **Program / Cohort** | NetworkWalks – Batch B083 |
-| **Module** | Week 04 |
+The main focus was on application security, authentication, and the protection of sensitive files.
 
-> **Disclaimer:** All testing activities documented here were conducted strictly within an authorized educational lab environment. Sensitive patient records, employee personally identifiable information (PII), and recovered passwords have been redacted from this public documentation.
+| Detail | Value |
+|---|---|
+| Target | `medirozahospital.com` |
+| Organization | Mediroza General Hospital |
+| Assessment | Black-Box Web Application Pentest |
+| Training | NetworkWalks |
+| Cohort | B084 |
+| Week | 04 |
+| Duration | 5 Days |
+
+> **Disclaimer:** This repository is intended for authorized educational documentation. No patient records, credentials, passwords, or confidential database contents are published here.
 
 ---
 
 ## Table of Contents
 
-1. [Scope & Engagement Rules](#1-scope--engagement-rules)
-2. [Testing Environment & Tools](#2-testing-environment--tools)
-3. [Reconnaissance & Enumeration](#3-reconnaissance--enumeration)
-4. [Sensitive Information Disclosure (Database Backup)](#4-sensitive-information-disclosure-database-backup)
-5. [Authentication & SQL Injection Exploitation](#5-authentication--sql-injection-exploitation)
-6. [Unauthorized Access to Patient Lab Reports](#6-unauthorized-access-to-patient-lab-reports)
-7. [Offline PDF Password Recovery](#7-offline-pdf-password-recovery)
-8. [Findings & Risk Summary](#8-findings--risk-summary)
-9. [Remediation Recommendations](#9-remediation-recommendations)
-10. [References](#10-references)
+- [Scope](#scope)
+- [Tools](#tools)
+- [01 - Reconnaissance](#01---reconnaissance)
+- [02 - Information Disclosure](#02---information-disclosure)
+- [03 - Authentication Testing](#03---authentication-testing)
+- [04 - SQL Injection](#04---sql-injection)
+- [05 - Confidential Reports](#05---confidential-reports)
+- [06 - PDF Password Recovery](#06---pdf-password-recovery)
+- [Findings Summary](#findings-summary)
+- [Recommendations](#recommendations)
+- [Conclusion](#conclusion)
 
 ---
 
-## 1. Scope & Engagement Rules
+## Scope
 
-- **In-Scope Target:** `https://medirozahospital.com`
-- **Out-of-Scope / Restrictions:**
-  - No testing outside the target domain.
-  - No Denial of Service (DoS) or resource-exhaustion attacks.
-  - No social engineering attacks.
+The assessment was limited to the following target:
 
----
+`medirozahospital.com`
 
-## 2. Testing Environment & Tools
+The following restrictions applied throughout the assessment:
 
-Testing was performed from **Kali Linux** using the following toolset:
-
-| Tool | Role in Engagement |
-| :--- | :--- |
-| **FFUF** | Directory and file fuzzing |
-| **cURL / Browser DevTools** | HTTP request inspection and manual verification |
-| **Burp Suite** | Intercepting and analyzing authentication requests |
-| **SQLMap / Manual Payloads** | Testing and exploiting SQL Injection in the Patient Portal |
-| **pdf2john / pdfcrack / Python** | Extracting PDF encryption hashes and offline password recovery |
-| **RockYou Wordlist** | Dictionary-based password cracking |
+- No Social Engineering.
+- No Denial of Service attacks.
+- No testing outside the agreed scope.
+- Findings must remain private until the official Reveal Session.
 
 ---
 
-## 3. Reconnaissance & Enumeration
+## Tools
 
-### 3.1 Directory & File Fuzzing (`FFUF`)
+These are the main tools I used during this part of the assessment.
 
-Active directory enumeration was run against the target to uncover hidden directories, backup files, and administrative entry points while filtering out standard `404` and `403` responses:
+| Tool | Usage |
+|---|---|
+| [FFUF](https://github.com/ffuf/ffuf) | Directory and file enumeration |
+| [PDFCrack](https://github.com/robins/pdfcrack) | Offline PDF password recovery |
+| RockYou | Password wordlist |
+| cURL | Inspecting accessible web resources |
+| Browser | Manual application testing |
+
+---
+
+# 01 - Reconnaissance
+
+### 1.1 Directory Enumeration
+
+I started with directory enumeration using FFUF to get a better picture of the application's publicly accessible resources.
+
+The goal was simple: find paths that were not immediately visible through normal website navigation.
+
+**Command:**
 
 ```bash
-ffuf -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -u [https://medirozahospital.com/FUZZ](https://medirozahospital.com/FUZZ) -c -fc 404,403 -t 40
-Key Discoveries:/robots.txt/old/ (an exposed legacy directory)Figure 1: Directory fuzzing results revealing /robots.txt and /old/.3.2 robots.txt InspectionChecking /robots.txt confirmed disallowed/unlisted paths referenced by the web application:Bashcurl -s [https://medirozahospital.com/robots.txt](https://medirozahospital.com/robots.txt)
-Figure 2: Contents of /robots.txt.4. Sensitive Information Disclosure (Database Backup)4.1 Exposed /old/ Directory & SQL DumpNavigating to /old/ revealed directory listing or direct access to an unauthenticated SQL database backup file (mediroza_db_backup_2019.sql), generated by the Mediroza CMS 1.4.2 backup module for the mediroza_hr database.Figure 3: Accessible /old/ directory containing legacy backup artifacts.Figure 4: Exposed SQL backup file (mediroza_db_backup_2019.sql) containing HR and shareholder tables.4.2 Exposed Data Summary & ImpactInspecting the SQL dump confirmed the exposure of two sensitive tables:staff table (30 records): Full names, job titles, departments, corporate email addresses, phone numbers, national ID numbers, hire dates, and monthly salaries (monthly_salary_zar).shareholders table (10 records): Shareholder names, share classes (Ordinary / Preferential), number of shares held, and ownership percentages totaling 100% (1,000,000 shares).Impact: Any external attacker can download internal HR, payroll, and corporate ownership records without authentication, creating severe privacy, regulatory, and targeted phishing risks.5. Authentication & SQL Injection Exploitation5.1 Username EnumerationTesting the Patient Portal login form revealed verbose, distinct error messages depending on whether the submitted username existed in the backend:Test CaseObserved ResponseNon-existent usernameUsername does not existValid username + wrong passwordIncorrect passwordFigure 5: Distinct authentication error messages confirming valid user accounts.5.2 SQL Injection & Authentication BypassInjecting a single quote (') into the login form triggered an unhandled PHP mysqli_query() syntax error, confirming that user input was concatenated directly into a MySQL query without parameterization:PlaintextWarning: mysqli_query(): You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''or 1=1--' at line 1
-Figure 6: Verbose MySQL syntax error exposed by the Patient Portal login handler.Using a valid boolean-based SQL injection payload (' OR 1=1#) bypassed the authentication check and granted unauthorized access to the restricted patient area.Figure 7: Successful authentication bypass granting access to the Patient Portal.6. Unauthorized Access to Patient Lab ReportsOnce inside the restricted portal, three confidential patient laboratory reports in PDF format were accessible for download:patient_report_1.pdfpatient_report_2.pdfpatient_report_3.pdfMetricStatusRestricted Portal AccessBypassed via SQLiPatient Lab Reports Found3 PDF FilesFile-Level ProtectionPassword Encrypted (RC4 / AES)Figure 8: Restricted Patient Portal listing three confidential PDF lab reports.7. Offline PDF Password Recovery7.1 Encryption Analysis & Cracking WorkflowEach downloaded PDF was protected with a document-open password. Inspecting the encryption metadata (e.g., Version: V2, Revision: R3, 128-bit) and running offline dictionary attacks recovered the passwords for all three reports:Bash# Example offline recovery workflow using pdfcrack / hash extraction
+ffuf -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -u https://medirozahospital.com/FUZZ -c -recursion -fc 404,403
+```
+
+The scan revealed several interesting paths. Two discoveries caught my attention:
+
+- `robots.txt`
+- A directory named `old`
+
+The second discovery was worth investigating further.
+
+**Evidence:**
+
+![FFUF Enumeration](01-ffuf-enumeration.png)
+
+*Figure 01 – FFUF results showing discovered paths.*
+
+### 1.2 Checking robots.txt
+
+I also checked `robots.txt` to see whether the website referenced any additional paths.
+
+```bash
+curl -s https://medirozahospital.com/robots.txt
+```
+
+This was part of the initial information-gathering process.
+
+**Evidence:**
+
+![Robots TXT](02-robots-txt.png)
+
+*Figure 02 – robots.txt inspection.*
+
+---
+
+# 02 - Information Disclosure
+
+### 2.1 The old Directory
+
+I decided to investigate the `old` directory discovered during enumeration.
+
+It turned out to be more interesting than expected: the directory contained an old database backup.
+
+**Evidence:**
+
+![Old Directory](03-old-directory.png)
+
+*Figure 03 – The discovered old directory.*
+
+### 2.2 Database Backup
+
+Further inspection of the backup revealed records related to hospital employees and shareholders.
+
+This was an important finding. A database backup should not be directly accessible through a public web directory, especially when it contains internal organizational information.
+
+**Evidence:**
+
+![Database Backup](04-database-backup.png)
+
+*Figure 04 – Exposed database backup. Sensitive information has been redacted.*
+
+**What made this interesting?**
+
+The backup provided access to information that should have remained restricted to authorized personnel.
+
+---
+
+# 03 - Authentication Testing
+
+### 3.1 Testing the Login Page
+
+After the initial reconnaissance, I moved to the login page to examine how the application handled authentication errors.
+
+I started with a simple invalid username and password:
+
+`test / test`
+
+The application responded that the username did not exist.
+
+Next, I tried the administrative username with an incorrect password. This time, the response was different: the application indicated that the password was incorrect.
+
+| Test | Response |
+|---|---|
+| Invalid username | Username does not exist |
+| Existing username, wrong password | Incorrect password |
+
+This difference revealed something useful: the application was disclosing whether a username existed.
+
+This is known as **Username Enumeration**.
+
+**Evidence:**
+
+![User Enumeration](05-user-enumeration.png)
+
+*Figure 05 – Different responses from the login page.*
+
+---
+
+# 04 - SQL Injection
+
+### 4.1 Identifying MySQL
+
+While examining the login form, I tested how the application handled unexpected input.
+
+One of the responses was particularly interesting: instead of returning a normal authentication message, the application displayed a database-related error.
+
+The error exposed information about the backend technology and indicated that the application was using **MySQL**.
+
+**Evidence:**
+
+![MySQL Error](06-mysql-error.png)
+
+*Figure 06 – Database error revealing MySQL.*
+
+### 4.2 Authentication Bypass
+
+The database error suggested that user input was being handled unsafely.
+
+Further testing confirmed that the login mechanism was vulnerable to SQL Injection. I was able to bypass authentication and reach a restricted page without completing the normal login process.
+
+This was a major turning point in the assessment because it opened access to functionality that was not publicly available.
+
+**Vulnerability:** SQL Injection – Authentication Bypass
+
+**Evidence:**
+
+[Insert authentication bypass screenshot here]
+
+### Why it matters
+
+An authentication bypass can expose restricted application functionality to users who have not been properly authenticated.
+
+In this case, it also led to the discovery of confidential laboratory reports.
+
+---
+
+# 05 - Confidential Reports
+
+After gaining access to the restricted page, I found three laboratory reports in PDF format.
+
+All three files were password-protected.
+
+| Item | Result |
+|---|---|
+| Restricted page | Accessible |
+| PDF reports discovered | 3 |
+| Password protection | Enabled |
+| Document access | Not yet verified at this stage |
+
+**Evidence:**
+
+![Confidential Reports](screenshots/07-confidential-reports.png)
+
+*Figure 07 – Three protected laboratory reports.*
+
+The next step was to examine the PDF protection itself.
+
+---
+
+# 06 - PDF Password Recovery
+
+### 6.1 Working with PDFCrack
+
+I used PDFCrack to test the password strength of the three recovered documents.
+
+For this step, I used the RockYou wordlist and performed the recovery offline.
+
+**Commands:**
+
+```bash
 pdfcrack -w /usr/share/wordlists/rockyou.txt patient_report_1.pdf
+
 pdfcrack -w /usr/share/wordlists/rockyou.txt patient_report_2.pdf
+
 pdfcrack -w /usr/share/wordlists/rockyou.txt patient_report_3.pdf
-Note: Adjust or document the specific tool/wordlist used for each file (patient_report_1.pdf, patient_report_2.pdf, patient_report_3.pdf) if different techniques were required per report. All plaintext passwords and patient medical data are omitted from this repository.FileEncryption StatusRecovery StatusContent Verificationpatient_report_1.pdfPassword ProtectedRecoveredVerified (Redacted)patient_report_2.pdfPassword ProtectedRecoveredVerified (Redacted)patient_report_3.pdfPassword ProtectedRecoveredVerified (Redacted)Figure 9: Offline password recovery and verified decryption of the patient PDF reports (sensitive details redacted).8. Findings & Risk SummaryIDVulnerabilityAffected ComponentSeverityJustificationNW-01SQL Injection (Authentication Bypass)Patient Portal LoginCriticalUnsanitized input in mysqli_query() allows full authentication bypass into restricted patient records.NW-02Unauthenticated Database Backup Exposure/old/mediroza_db_backup_2019.sqlCriticalDirect public exposure of full staff salaries, national IDs, contact details, and shareholder ownership data.NW-03Broken Access Control on Medical ReportsPatient Lab Reports EndpointHighConfidential patient PDFs are accessible immediately upon bypassing front-end login without per-user object authorization.NW-04Weak PDF Encryption PasswordsPatient Lab Report PDFsHighDocument passwords are susceptible to offline dictionary attacks, exposing medical records once downloaded.NW-05Verbose Database Error MessagesPatient Portal BackendMediumExposes backend DBMS (MySQL) and query structure, aiding SQL injection exploitation.NW-06Username EnumerationPatient Portal LoginLowDistinct error messages allow attackers to confirm valid usernames before brute-force or targeted attacks.9. Remediation RecommendationsEliminate SQL Injection (Priority: Immediate):Replace dynamic string concatenation in mysqli_query() with Prepared Statements and parameterized queries (mysqli_prepare() / PDO).Disable display_errors and verbose database warnings in production PHP configurations.Remove Exposed Backups & Enforce Access Restrictions (Priority: Immediate):Delete /old/mediroza_db_backup_2019.sql and disable directory indexing (Options -Indexes in Apache or autoindex off in Nginx).Store database backups outside the public web root, encrypted at rest, with strict IAM/file permissions.Implement Proper Authorization & Session Controls (Priority: High):Enforce server-side session validation and object-level access control (ensuring a patient can only access their own report ID).Strengthen Authentication & Document Security (Priority: Medium):Return a generic authentication error message (Invalid username or password) and implement login rate-limiting.Generate strong, high-entropy passwords (or encrypted portal delivery) for patient PDF documents rather than predictable dictionary words.10. ReferencesOWASP Top 10 – A01:2021 Broken Access ControlOWASP Top 10 – A03:2021 InjectionOWASP SQL Injection Prevention Cheat SheetCWE-89: Improper Neutralization of Special Elements used in an SQL CommandCWE-530: Exposure of Backup File to an Unauthorized Control Sphere
+```
+
+### 6.2 Results
+
+The recovery process was successful for all three documents.
+
+| Document | Recovery Result |
+|---|---|
+| Patient Report 01 | Successful |
+| Patient Report 02 | Successful |
+| Patient Report 03 | Successful |
+
+**Evidence:**
+
+![PDFCrack Results](screenshots/08-pdfcrack-results.png)
+
+*Figure 08 – PDF password recovery results. Passwords are hidden.*
+
+### 6.3 Verifying Document Access
+
+After recovering the passwords, I opened each document to verify that the files could be accessed.
+
+This confirmed that the password protection did not prevent access once the passwords were recovered.
+
+**Evidence:**
+
+![PDF Access](9-pdf-access.png)
+
+*Figure 09 – Successful PDF access. Patient information is redacted.*
+
+---
+
+# Findings Summary
+
+Here is a summary of the issues identified so far.
+
+| ID | Finding | Category | Preliminary Severity |
+|---|---|---|---|
+| NW-01 | Exposed Database Backup | Information Disclosure | Critical |
+| NW-02 | Username Enumeration | Authentication Weakness | Medium |
+| NW-03 | SQL Injection | Injection | Critical |
+| NW-04 | Authentication Bypass | Authentication | Critical |
+| NW-05 | Unauthorized Access to Laboratory Reports | Broken Access Control | Critical |
+| NW-06 | Weak PDF Passwords | Password Security | High |
+
+*Severity levels are preliminary and subject to final impact assessment.*
+
+---
+
+# Recommendations
+
+Based on the findings, the following changes should be considered:
+
+| Finding | Recommended Action |
+|---|---|
+| Exposed Backup | Move backups outside the public web directory and restrict access. |
+| Username Enumeration | Return generic login error messages. |
+| SQL Injection | Use prepared statements and parameterized queries. |
+| Authentication Bypass | Review authentication logic and enforce secure server-side validation. |
+| Confidential Reports | Apply authorization checks to every document request. |
+| Weak PDF Passwords | Use strong, unique passwords and modern encryption. |
+
+Additional recommendations:
+
+- Review server access logs for suspicious activity.
+- Apply the principle of least privilege to database accounts.
+- Ensure sensitive files are not accessible through predictable URLs.
+- Conduct a follow-up security assessment after remediation.
+
+---
+
+# Conclusion
+
+This assessment started with a simple directory scan and gradually led to several important discoveries.
+
+The most significant part was how the findings connected: an exposed backup revealed internal information, authentication testing uncovered weaknesses in the login process, and the SQL Injection vulnerability led to a restricted page containing confidential reports.
+
+The three PDF files were also successfully accessed after recovering their passwords using PDFCrack.
+
+There is still more to investigate, particularly regarding the full extent of the exposed organizational information. Additional findings will be documented as the assessment progresses.
+
+---
+
+## References
+
+- [FFUF – GitHub](https://github.com/ffuf/ffuf)
+- [PDFCrack – GitHub](https://github.com/robins/pdfcrack)
+- [OWASP Web Security Testing Guide](https://owasp.org/www-project-web-security-testing-guide/)
+- [OWASP SQL Injection Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html)
+- [CWE-89 – SQL Injection](https://cwe.mitre.org/data/definitions/89.html)
+- [CWE-200 – Exposure of Sensitive Information](https://cwe.mitre.org/data/definitions/200.html)
+
+---
+
+<p align="center">
+  <b>NetworkWalks | B084</b><br>
+  Week 04 – Practical Penetration Testing
+</p>
